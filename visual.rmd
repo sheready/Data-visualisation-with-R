@@ -212,6 +212,7 @@ ggplot(data = diamonds) +
 
 ggplot(data = diamonds, mapping = aes(x = cut, fill = clarity)) + 
   geom_bar(alpha = 1/5, position = "identity")
+
 ggplot(data = diamonds, mapping = aes(x = cut, colour = clarity)) + 
   geom_bar(fill = NA, position = "identity")
 
@@ -231,6 +232,7 @@ ggplot(data = diamonds) +
 
 ggplot(data = mpg) + 
   geom_point(mapping = aes(x = displ, y = hwy))
+
 ggplot(data = mpg) + 
   geom_point(mapping = aes(x = displ, y = hwy), position = "jitter")
 
@@ -241,6 +243,7 @@ ggplot(data = mpg) +
 
 ggplot(data = mpg, mapping = aes(x = class, y = hwy)) + 
   geom_boxplot()
+
 ggplot(data = mpg, mapping = aes(x = class, y = hwy)) + 
   geom_boxplot() +
   coord_flip()
@@ -250,6 +253,7 @@ install.packages("maps")
 install.packages("ggmap")
 library(maps)
 library(ggmap)
+?maps
 nz <- map_data("nz")
 
 ggplot(nz, aes(long, lat, group = group)) +
@@ -290,7 +294,7 @@ flights
 #To see the whole dataset, you can run View(flights)
 view(flights)
 
-#These describe the type of each variable in the tibble:
+#Let's describe the type of each variable in the tibble:
 #int stands for integers.
 #dbl stands for doubles, or real numbers.
 #chr stands for character vectors, or strings.
@@ -318,8 +322,142 @@ filter(flights, month == 1, day == 1)
 #to save the result, you’ll need to use the assignment operator.
 
 jan1 <- filter(flights, month == 1, day == 1)
-jan1
+view(jan1)
 
+#Comparison operators
+#These include: >, >=, <, <=, != (not equal), and == (equal).
+#A common problem you might encounter when using ==: floating point numbers,for example
+sqrt(2) ^ 2 == 2
 
+1 / 49 * 49 == 1
+#The outputs does not make sense.This is because computers use finite precision arithmetic.Instead of relying on ==,let's use near():
+near(sqrt(2) ^ 2,  2)
 
+near(1 / 49 * 49, 1)
+
+#Logical operators
+#https://d33wubrfki0l68.cloudfront.net/01f4b6d39d2be8269740a3ad7946faa79f7243cf/8369a/diagrams/transform-logical.png
+#Let's find all flights that departed in November or December
+filter(flights, month == 11 | month == 12)
+
+#We can also rewrite the code above using x %in% y. This will select every row where x is one of the values in y.
+
+nov_dec <- filter(flights, month %in% c(11, 12))
+view(nov_dec)
+
+#We can also use the De Morgan’s law: !(x & y) is the same as !x | !y, and !(x | y) is the same as !x & !y.Let's find flights that weren’t delayed (on arrival or departure) by more than two hours, you could use either of the following two filters:
+
+filter(flights, !(arr_delay > 120 | dep_delay > 120))
+filter(flights, arr_delay <= 120, dep_delay <= 120)
+
+#Arrange rows with the arrange() function.
+#It takes a data frame and a set of column names (or more complicated expressions) to order by.
+arrange(flights, year, month, day)
+
+#Use desc() to re-order by a column in descending order:
+arrange(flights, desc(dep_delay))
+
+#Select columns with select() it allows you to rapidly zoom in on a useful subset using operations based on the names of the variables.
+#Select columns by name
+select(flights, year, month, day)
+
+#Select all columns year and day (inclusive)
+select(flights, year:day)
+
+#Select all columns except those from year to day (inclusive)
+select(flights, -(year:day))
+
+#There are a number of helper functions you can use within select():starts_with("abc"): matches names that begin with “abc”,ends_with("xyz"): matches names that end with “xyz”,contains("ijk"): matches names that contain “ijk”,matches("(.)\\1"): selects variables that match a regular expression. This one matches any variables that contain repeated characters. You’ll learn more about regular expressions in strings,num_range("x", 1:3): matches x1, x2 and x3.
+
+?select
+
+#To rename variables
+g <- rename(flights, tail_num = tailnum)
+view(g)
+
+#We can also use select() in conjunction with the everything() helper. This is useful if you have a handful of variables you’d like to move to the start of the data frame.
+
+select(flights, time_hour, air_time, everything())
+
+#Add new variables with mutate(),it adds new columns that are functions of existing columns.mutate() always adds new columns at the end of your dataset so we’ll start by creating a narrower dataset so we can see the new variables. 
+
+flights_sml <- select(flights, 
+  year:day, 
+  ends_with("delay"), 
+  distance, 
+  air_time
+)
+flights_sml
+mutate(flights_sml,
+  gain = dep_delay - arr_delay,
+  speed = distance / air_time * 60
+)
+#we can add more columns with the variables we just created
+mutate(flights_sml,
+  gain = dep_delay - arr_delay,
+  hours = air_time / 60,
+  gain_per_hour = gain / hours
+)
+
+#To keep the new variables, use transmute():
+transmute(flights,
+  gain = dep_delay - arr_delay,
+  hours = air_time / 60,
+  gain_per_hour = gain / hours
+)
+
+#Let's work on grouped summaries with summarise().It collapses a data frame to a single row.
+summarise(flights, delay = mean(dep_delay, na.rm = TRUE))
+
+#summarise() can be paired with group_by(). This changes the unit of analysis from the complete dataset to individual groups.Let's obtain the average delay per date.
+by_day <- group_by(flights, year, month, day)
+summarise(by_day, delay = mean(dep_delay, na.rm = TRUE))
+
+#When using a dataframe function na.rm in r refers to the logical parameter that tells the function whether or not to remove NA values from the calculation.
+#When na.rm is TRUE, the function skips over any NA values. However, when na.rm is FALSE, then it returns NA from the calculation being done on the entire row or column.
+#Combining multiple operations with the pipe
+by_dest <- group_by(flights, dest)
+delay <- summarise(by_dest,
+  count = n(),
+  dist = mean(distance, na.rm = TRUE),
+  delay = mean(arr_delay, na.rm = TRUE)
+)
+#summarise() ungrouping output (override with .groups argument)
+delay <- filter(delay, count > 20, dest != "HNL")
+
+# It looks like delays increase with distance up to ~750 miles 
+# and then decrease. Maybe as flights get longer there's more 
+# ability to make up delays in the air?
+ggplot(data = delay, mapping = aes(x = dist, y = delay)) +
+  geom_point(aes(size = count), alpha = 1/3) +
+  geom_smooth(se = FALSE)
+
+#another way to tackle the same problem with the pipe, %>%:
+delays <- flights %>% 
+  group_by(dest) %>% 
+  summarise(
+    count = n(),
+    dist = mean(distance, na.rm = TRUE),
+    delay = mean(arr_delay, na.rm = TRUE)
+  ) %>% 
+  filter(count > 20, dest != "HNL")
+#Counts
+#It's good to include either a count (n()), or a count of non-missing values (sum(!is.na(x))).It helps check that you’re not drawing conclusions based on very small amounts of data.Let’s look at the planes (identified by their tail number) that have the highest average delays.
+delays <- not_cancelled %>% 
+  group_by(tailnum) %>% 
+  summarise(
+    delay = mean(arr_delay)
+  )
+ggplot(data = delays, mapping = aes(x = delay)) + 
+  geom_freqpoly(binwidth = 10)
+
+#Let's draw a scatterplot of number of flights vs. average delay:
+delays <- not_cancelled %>% 
+  group_by(tailnum) %>% 
+  summarise(
+    delay = mean(arr_delay, na.rm = TRUE),
+    n = n()
+  )
+ggplot(data = delays, mapping = aes(x = n, y = delay)) + 
+  geom_point(alpha = 1/10)
 
